@@ -18,6 +18,72 @@ const GActionEntry app_actions[] =
 static void construct_menu (GtkApplication *app, GtkWidget *box, gpointer data);
 static void do_number (GtkButton *button, gpointer data);
 
+/* Determines if to continue the timer or not */
+gboolean continue_timer = FALSE;
+
+/* Determines if the timer has started */
+gboolean start_timer = FALSE;
+
+gboolean _label_update(gpointer data)
+{
+	widgets *a = (widgets *) data;
+	g_snprintf (a->bufferStatusBar, 255, "time elapsed %d s - %s", ++a->sec_expired, a->msg);
+	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->bufferStatusBar);
+
+	if (a->sec_expired > a->difficulty)
+	{
+//				_pause_resume_timer ((gpointer) a);
+
+		continue_timer = FALSE;
+		start_timer = FALSE;
+//		gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
+			message_dialog_lostgame (NULL, NULL, (gpointer) a, "\n\nTIME\n\n");
+			
+
+	}
+
+	return continue_timer;
+}
+
+void _start_timer (gpointer data)
+{
+	widgets *a = (widgets *) data;
+
+	if(!start_timer)
+	{
+		g_timeout_add_seconds(1, _label_update, a);
+		start_timer = TRUE;
+		continue_timer = TRUE;
+	}
+}
+
+void _pause_resume_timer (gpointer data)
+{
+	widgets *a = (widgets *) data;
+	if(start_timer)
+	{
+		if(continue_timer)
+		{
+			g_timeout_add_seconds(1, _label_update, a);
+		}
+		else
+		{
+			/*Decrementing because timer will be hit one more time before expiring*/
+			a->sec_expired--;
+		}
+	}
+
+}
+
+void _reset_timer (gpointer data)
+{
+	widgets *a = (widgets *) data;
+
+	a->sec_expired = -1;
+	continue_timer = FALSE;
+	start_timer = FALSE;
+}
+
 void normal_button (GtkButton *button, gpointer data)
 {
 	widgets *a = (widgets *) data;
@@ -61,6 +127,8 @@ void message_dialog_lostgame (GSimpleAction *action, GVariant *parameter, gpoint
 	GtkWidget *dialog;
 	widgets *a = (widgets *) data;
 
+	_pause_resume_timer ((gpointer) a);
+
 	dialog = gtk_message_dialog_new (GTK_WINDOW (a->window),	 GTK_DIALOG_MODAL| GTK_DIALOG_DESTROY_WITH_PARENT,
 									 GTK_MESSAGE_INFO,
 									 GTK_BUTTONS_OK,
@@ -68,13 +136,15 @@ void message_dialog_lostgame (GSimpleAction *action, GVariant *parameter, gpoint
 	g_signal_connect (dialog, "response", G_CALLBACK (gtk_widget_destroy), NULL);
 	gtk_widget_show (dialog);
 	gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
-	
+
 }
 
 void message_dialog_wongame (GSimpleAction *action, GVariant *parameter, gpointer data, gchar *showText)
 {
 	GtkWidget *dialog;
 	widgets *a = (widgets *) data;
+
+	_pause_resume_timer ((gpointer) a);
 
 	dialog = gtk_message_dialog_new (GTK_WINDOW (a->window),	 GTK_DIALOG_MODAL| GTK_DIALOG_DESTROY_WITH_PARENT,
 									 GTK_MESSAGE_INFO,
@@ -91,9 +161,9 @@ static void do_number (GtkButton *button, gpointer data)
 	gchar *temp;
 	unsigned int klick = 999;
 	int k, goodcount = 0;
-	
+
 	a->gamecount++;
-	
+
 	printf("%d\n",a->gamecount);
 
 	temp = (gchar*) gtk_button_get_label (button);
@@ -101,35 +171,36 @@ static void do_number (GtkButton *button, gpointer data)
 	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->bufferStatusBar);
 
 	getInteger(temp, &klick);
-	
+
 	for (k = 0; k < (a->difficulty / 2); k++)
 	{
 		if (klick == a->chosenNumber[k])
-		{			
-			goodcount = 0;
+		{
+			a->goodcount = 0;
 			a->chosenNumber[k] = 999;
-			break;			
+			break;
 		}
 		else
 		{
-			goodcount = 1;
+			a->goodcount = 1;
 		}
-		
+
 	}
 
-	
-	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->bufferStatusBar);
-	
-		
 	if (a->gamecount == a->difficulty/2)
 	{
+		continue_timer = FALSE;
 		message_dialog_wongame (NULL, NULL, (gpointer) a, "\n\nWON\n\n");
+		return;
 	}
-		
-	if (goodcount == 1)
+
+	if (a->goodcount == 1)
 	{
+		continue_timer = FALSE;
 		message_dialog_lostgame (NULL, NULL, (gpointer) a, "\n\nLOST\n\n");
+		return;
 	}
+
 
 
 }
@@ -314,8 +385,10 @@ void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data,
 
 	gtk_widget_show_all (GTK_WIDGET (a->window));
 
+	_start_timer((gpointer) a);
+
 	g_snprintf (a->msg, 256, "select the correct %02d | %02d | %02d | %02d | %02d | %02d", a->chosenNumber[0], a->chosenNumber[1], a->chosenNumber[2], a->chosenNumber[3], a->chosenNumber[4], a->chosenNumber[5]);
-	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->msg);
+	//gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->msg);
 }
 
 static void construct_menu (GtkApplication *app, GtkWidget *box, gpointer data)

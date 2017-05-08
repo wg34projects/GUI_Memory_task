@@ -83,6 +83,8 @@ void message_dialog_startgame (GSimpleAction *action, GVariant *parameter, gpoin
 void restart_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_reset_timer((gpointer) a);
 
 	if (a->firstgame == 1)
 	{

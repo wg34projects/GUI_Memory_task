@@ -27,6 +27,8 @@ typedef struct {
 	int difficulty;
 	int firstgame;
 	int j, i, gamecount;
+	int sec_expired;
+	int goodcount, timecount;
 } widgets;
 
 #define EASY 4
@@ -37,5 +39,9 @@ void construct_overlay (GtkApplication *app, GtkWidget *box, gpointer data, int 
 void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data, int gridsize);
 void getInteger(char *input, unsigned int *numInteger);
 void message_dialog_lostgame (GSimpleAction *action, GVariant *parameter, gpointer data, gchar *showText);
+void _start_timer (gpointer data);
+void _reset_timer (gpointer data);
+void _pause_resume_timer (gpointer data);
+
 
 #endif
