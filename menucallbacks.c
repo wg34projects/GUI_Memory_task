@@ -37,7 +37,7 @@ void message_dialog_OK (GSimpleAction *action, GVariant *parameter, gpointer dat
 
 	if (response == GTK_RESPONSE_OK)
 	{
-		construct_overlay (a->app, NULL, (gpointer) a, a->difficulty);
+		construct_overlay (a->app, NULL, (gpointer) a);
 		gtk_widget_destroy (dialog);
 	}
 	else
@@ -48,8 +48,10 @@ void message_dialog_OK (GSimpleAction *action, GVariant *parameter, gpointer dat
 
 void message_dialog_startgame (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	GtkWidget *dialog;
+	GtkWidget *dialog, *label;
 	gint response;
+	GtkWidget *content_area, *grid;
+
 
 	widgets *a = (widgets *) data;
 
@@ -61,21 +63,27 @@ void message_dialog_startgame (GSimpleAction *action, GVariant *parameter, gpoin
 										  GTK_RESPONSE_CANCEL,
 										  NULL);
 
-	gtk_widget_show (dialog);
+	content_area = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+	grid = gtk_grid_new();
+	gtk_grid_set_row_homogeneous (GTK_GRID (grid), TRUE);
+	gtk_grid_set_column_homogeneous (GTK_GRID (grid), TRUE);
+	gtk_grid_set_row_spacing (GTK_GRID (grid), 5);
+	gtk_container_add (GTK_CONTAINER (content_area), grid);
+	gtk_container_set_border_width (GTK_CONTAINER (content_area), 10);
+	label = gtk_label_new ("if you are familiar with the game concentrate on the symbols after OK...\n\nif you need help press Cancel and go to the help menu...");
+	gtk_grid_attach (GTK_GRID (grid), label, 0, 0, 1, 1);	
+		
+	gtk_widget_show_all (dialog);
 	response = gtk_dialog_run (GTK_DIALOG (dialog));
 
 	if (response == GTK_RESPONSE_OK)
 	{
-		if (a->firstgame == 0)
-		{
-			gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
-		}
-		
-		construct_overlay (a->app, NULL, (gpointer) a, a->difficulty);
+		construct_overlay (a->app, NULL, (gpointer) a);
 		gtk_widget_destroy (dialog);
 	}
 	else
 	{
+		constructWelcomePage (a->app, (gpointer) a);
 		gtk_widget_destroy (dialog);
 	}	
 }
@@ -84,7 +92,11 @@ void restart_callback (GSimpleAction *action, GVariant *parameter, gpointer data
 {
 	widgets *a = (widgets *) data;
 	
+	_pause_resume_timer((gpointer) a);
 	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
 
 	if (a->firstgame == 1)
 	{
@@ -101,6 +113,12 @@ void restart_callback (GSimpleAction *action, GVariant *parameter, gpointer data
 void easy_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
 	g_print ("easy was clicked ...\n");
 	a->difficulty = EASY;
@@ -112,6 +130,12 @@ void easy_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 void medium_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
 	g_print ("medium was clicked ...\n");
 	a->difficulty = MEDIUM;
@@ -121,6 +145,12 @@ void medium_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 void hard_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
 	g_print ("hard was clicked ...\n");
 	a->difficulty = HARD;
@@ -131,14 +161,27 @@ void hard_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 void view_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
-	message_dialog (action, NULL, (gpointer) a, "view klick");
+	//message_dialog (action, NULL, (gpointer) a, "view klick");
+	constructHighscorePage (a->app, (gpointer) a);
 	g_print ("view was clicked ...\n");
 }
 
 void quit_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
 	g_print ("quit was clicked ...\n");
 	g_application_quit (G_APPLICATION (a->app));
@@ -147,6 +190,12 @@ void quit_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 void about_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
 	message_dialog (action, NULL, (gpointer) a, "section:\n\nsmall memory game\nby el16b005 BEL2 SS2017\n\ncheck help section for details");
 	g_print ("about was clicked ...\n");
@@ -155,6 +204,12 @@ void about_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 void help_callback (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
 	widgets *a = (widgets *) data;
+	
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+	
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;	
 
 	message_dialog (action, NULL, (gpointer) a, "section:\n\nsmall memory game\n\n");
 	g_print ("help was clicked ...\n");

@@ -1,78 +1,65 @@
 #include "gnomemenu.h"
 #include "menucallbacks.h"
 
-// map menu actions to callbacks
-
 const GActionEntry app_actions[] =
 {
-	{ "restart", restart_callback },
-	{ "easy", easy_callback },
-	{ "medium", medium_callback },
-	{ "hard", hard_callback },
-	{ "view", view_callback },
-	{ "quit", quit_callback },
-	{ "about", about_callback },
-	{ "help", help_callback }
+	{ "restart", 	restart_callback },
+	{ "easy", 	easy_callback },
+	{ "medium", 	medium_callback },
+	{ "hard", 	hard_callback },
+	{ "view", 	view_callback },
+	{ "quit", 	quit_callback },
+	{ "about", 	about_callback },
+	{ "help", 	help_callback }
 };
-
-static void construct_menu (GtkApplication *app, GtkWidget *box, gpointer data);
-static void do_number (GtkButton *button, gpointer data);
-
-/* Determines if to continue the timer or not */
-gboolean continue_timer = FALSE;
-
-/* Determines if the timer has started */
-gboolean start_timer = FALSE;
 
 gboolean _label_update(gpointer data)
 {
 	widgets *a = (widgets *) data;
-	g_snprintf (a->bufferStatusBar, 255, "time elapsed %d s - %s", ++a->sec_expired, a->msg);
-	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->bufferStatusBar);
+	++a->sec_expired;
 
-	if (a->sec_expired > a->difficulty)
+	if (a->continue_timer)
 	{
-//				_pause_resume_timer ((gpointer) a);
-
-		continue_timer = FALSE;
-		start_timer = FALSE;
-//		gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
-			message_dialog_lostgame (NULL, NULL, (gpointer) a, "\n\nTIME\n\n");
-			
-
+		g_snprintf (a->bufferStatusBar, 255, "time elapsed %03d s | countdown %03d s | spent klicks %d from %d", a->sec_expired, a->difficulty*2 - a->sec_expired, a->gamecount, a->difficulty / 2);
+		gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->bufferStatusBar);
 	}
 
-	return continue_timer;
+	if (a->sec_expired > a->difficulty*2)
+	{
+		a->continue_timer = FALSE;
+		a->start_timer = FALSE;
+		message_dialog_lostgame (NULL, NULL, (gpointer) a, "\ntime ran out, you lost...\nplay again to improve....");
+	}
+
+	return a->continue_timer;
 }
 
 void _start_timer (gpointer data)
 {
 	widgets *a = (widgets *) data;
 
-	if(!start_timer)
+	if(!a->start_timer)
 	{
 		g_timeout_add_seconds(1, _label_update, a);
-		start_timer = TRUE;
-		continue_timer = TRUE;
+		a->start_timer = TRUE;
+		a->continue_timer = TRUE;
 	}
 }
 
 void _pause_resume_timer (gpointer data)
 {
 	widgets *a = (widgets *) data;
-	if(start_timer)
+	if(a->start_timer)
 	{
-		if(continue_timer)
+		if(a->continue_timer)
 		{
 			g_timeout_add_seconds(1, _label_update, a);
 		}
 		else
 		{
-			/*Decrementing because timer will be hit one more time before expiring*/
 			a->sec_expired--;
 		}
 	}
-
 }
 
 void _reset_timer (gpointer data)
@@ -80,21 +67,46 @@ void _reset_timer (gpointer data)
 	widgets *a = (widgets *) data;
 
 	a->sec_expired = -1;
-	continue_timer = FALSE;
-	start_timer = FALSE;
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
 }
 
 void normal_button (GtkButton *button, gpointer data)
 {
 	widgets *a = (widgets *) data;
 
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
+
 	gtk_widget_set_sensitive (GTK_WIDGET (a->gearmenubutton), TRUE);
-	gtk_container_remove (GTK_CONTAINER (a->window), a->grid);
+}
+
+void high_button (GtkButton *button, gpointer data)
+{
+	widgets *a = (widgets *) data;
+
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
+
+	gtk_widget_set_sensitive (GTK_WIDGET (a->gearmenubutton), TRUE);
+	constructHighscorePage (a->app, (gpointer) a);
 }
 
 void easy_button (GtkButton *button, gpointer data)
 {
 	widgets *a = (widgets *) data;
+
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
 
 	gtk_widget_set_sensitive (GTK_WIDGET (a->gearmenubutton), TRUE);
 	gtk_container_remove (GTK_CONTAINER (a->window), a->grid);
@@ -106,6 +118,12 @@ void medium_button (GtkButton *button, gpointer data)
 {
 	widgets *a = (widgets *) data;
 
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
+
 	gtk_widget_set_sensitive (GTK_WIDGET (a->gearmenubutton), TRUE);
 	gtk_container_remove (GTK_CONTAINER (a->window), a->grid);
 	a->difficulty = MEDIUM;
@@ -115,6 +133,12 @@ void medium_button (GtkButton *button, gpointer data)
 void hard_button (GtkButton *button, gpointer data)
 {
 	widgets *a = (widgets *) data;
+
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
 
 	gtk_widget_set_sensitive (GTK_WIDGET (a->gearmenubutton), TRUE);
 	gtk_container_remove (GTK_CONTAINER (a->window), a->grid);
@@ -127,91 +151,130 @@ void message_dialog_lostgame (GSimpleAction *action, GVariant *parameter, gpoint
 	GtkWidget *dialog;
 	widgets *a = (widgets *) data;
 
-	_pause_resume_timer ((gpointer) a);
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
 
 	dialog = gtk_message_dialog_new (GTK_WINDOW (a->window),	 GTK_DIALOG_MODAL| GTK_DIALOG_DESTROY_WITH_PARENT,
 									 GTK_MESSAGE_INFO,
 									 GTK_BUTTONS_OK,
 									 "%s", showText);
+
 	g_signal_connect (dialog, "response", G_CALLBACK (gtk_widget_destroy), NULL);
 	gtk_widget_show (dialog);
+	a->won = 1;
 	gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
-
+	constructWelcomePage (a->app, (gpointer) a);
 }
 
-void message_dialog_wongame (GSimpleAction *action, GVariant *parameter, gpointer data, gchar *showText)
+void message_dialog_wongame (GSimpleAction *action, GVariant *parameter, gpointer data)
 {
-	GtkWidget *dialog;
+	GtkWidget *dialog, *label;
+	gint response;
+	GtkWidget *content_area, *grid;
+	
 	widgets *a = (widgets *) data;
 
-	_pause_resume_timer ((gpointer) a);
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
 
-	dialog = gtk_message_dialog_new (GTK_WINDOW (a->window),	 GTK_DIALOG_MODAL| GTK_DIALOG_DESTROY_WITH_PARENT,
-									 GTK_MESSAGE_INFO,
-									 GTK_BUTTONS_OK,
-									 "%s", showText);
-	g_signal_connect (dialog, "response", G_CALLBACK (gtk_widget_destroy), NULL);
-	gtk_widget_show (dialog);
-	gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
+	
+	dialog = gtk_dialog_new_with_buttons ("Highscore yes-no?", 	  
+	                                      GTK_WINDOW (a->window),
+										  GTK_DIALOG_MODAL| GTK_DIALOG_DESTROY_WITH_PARENT,
+										  ("_OK"),
+										  GTK_RESPONSE_OK,
+										  "_Cancel",
+										  GTK_RESPONSE_CANCEL,
+										  NULL);
+
+	content_area = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+	grid = gtk_grid_new();
+	gtk_grid_set_row_homogeneous (GTK_GRID (grid), TRUE);
+	gtk_grid_set_column_homogeneous (GTK_GRID (grid), TRUE);
+	gtk_grid_set_row_spacing (GTK_GRID (grid), 5);
+	gtk_container_add (GTK_CONTAINER (content_area), grid);
+	gtk_container_set_border_width (GTK_CONTAINER (content_area), 10);
+	label = gtk_label_new ("you won, do you want to enter your data to the highscore list?\n\nyou can later watch your success from the menu");
+	gtk_grid_attach (GTK_GRID (grid), label, 0, 0, 1, 1);	
+		
+	gtk_widget_show_all (dialog);
+	response = gtk_dialog_run (GTK_DIALOG (dialog));
+	
+	if (response == GTK_RESPONSE_OK)
+	{
+		gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
+		constructHighscorePage (a->app, (gpointer) a);
+		gtk_widget_destroy (dialog);
+	}
+	else
+	{
+		gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
+		constructWelcomePage (a->app, (gpointer) a);
+		gtk_widget_destroy (dialog);
+	}
+	
 }
 
-static void do_number (GtkButton *button, gpointer data)
+void do_number (GtkButton *button, gpointer data)
 {
 	widgets *a = (widgets *) data;
 	gchar *temp;
 	unsigned int klick = 999;
-	int k, goodcount = 0;
+	int m, correctcount = 0;
 
 	a->gamecount++;
 
-	printf("%d\n",a->gamecount);
-
 	temp = (gchar*) gtk_button_get_label (button);
-	g_snprintf (a->bufferStatusBar, 256, "%s - %s", a->msg, temp);
-	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->bufferStatusBar);
 
 	getInteger(temp, &klick);
 
-	for (k = 0; k < (a->difficulty / 2); k++)
+	for (m = 0; m < (a->difficulty / 2); m++)
 	{
-		if (klick == a->chosenNumber[k])
+		if (klick == a->chosenNumber[m])
 		{
 			a->goodcount = 0;
-			a->chosenNumber[k] = 999;
+			a->chosenNumber[m] = 999;
+			correctcount++;
 			break;
 		}
 		else
 		{
 			a->goodcount = 1;
 		}
-
 	}
 
-	if (a->gamecount == a->difficulty/2)
+	if (a->gamecount == a->difficulty / 2)
 	{
-		continue_timer = FALSE;
-		message_dialog_wongame (NULL, NULL, (gpointer) a, "\n\nWON\n\n");
+		a->continue_timer = FALSE;
+		message_dialog_wongame (NULL, NULL, (gpointer) a);
 		return;
 	}
 
 	if (a->goodcount == 1)
 	{
-		continue_timer = FALSE;
-		message_dialog_lostgame (NULL, NULL, (gpointer) a, "\n\nLOST\n\n");
+		a->continue_timer = FALSE;
+		message_dialog_lostgame (NULL, NULL, (gpointer) a, "\nyou LOST... keep training...\nand maybe check the help...");
 		return;
 	}
-
-
-
 }
 
-
-static guint wait (gpointer data)
+guint wait (gpointer data)
 {
 	widgets *a = (widgets *) data;
 
+	_pause_resume_timer((gpointer) a);
+	_reset_timer((gpointer) a);
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
+		
 	gtk_container_remove (GTK_CONTAINER (a->window), a->overlay);
-	construct_overlay_play (a->app, NULL, (gpointer) a, a->difficulty);
+	construct_overlay_play (a->app, NULL, (gpointer) a);
 
 	return FALSE;
 }
@@ -225,107 +288,8 @@ void getInteger(char *input, unsigned int *numInteger)
 	*numInteger = (unsigned int)number;
 }
 
-void construct_overlay (GtkApplication *app, GtkWidget *box, gpointer data, int gridsize)
-{
-	GtkWidget *grid;
-	GtkWidget *vbox;
-	int k, l;
-	int good = 0;
-	time_t timer;
-	time (&timer);
-	srand ( (unsigned int) timer);
 
-	widgets *a = (widgets *) data;
-
-	a->firstgame = 0;
-
-	a->overlay = gtk_overlay_new ();
-	grid = gtk_grid_new ();
-	gtk_container_add (GTK_CONTAINER (a->overlay), grid);
-
-	a->statusbar = gtk_statusbar_new();
-	gtk_widget_set_size_request (a->statusbar, 300, 10);
-
-	gtk_grid_attach (GTK_GRID (grid), a->statusbar, 0, gridsize+1, gridsize, 1);
-
-	a->id = gtk_statusbar_get_context_id (GTK_STATUSBAR (a->statusbar), "demo");
-
-	while (1)
-	{
-		for (k = 0; k < 6; k++)
-		{
-			a->chosenNumber[k] = rand() % (gridsize*gridsize);
-		}
-
-		for(k = 6; k > 0; k--)
-		{
-			for(l = k - 1; l >= 0; l--)
-			{
-				if(a->chosenNumber[k] == a->chosenNumber[l])
-				{
-					good++;
-				}
-			}
-		}
-
-		if (good == 0)
-		{
-			break;
-		}
-		else
-		{
-			good = 0;
-		}
-	}
-
-	for (a->j = 0; a->j < a->difficulty; a->j++)
-	{
-		for (a->i = 0; a->i < a->difficulty; a->i++)
-		{
-			a->button = gtk_button_new();
-
-			GValue opacity = G_VALUE_INIT;
-			g_value_init (&opacity, G_TYPE_FLOAT);
-			g_value_set_float (&opacity, 1.0);
-			g_object_set_property (G_OBJECT (a->button), "opacity", &opacity);
-			g_value_unset (&opacity);
-
-			a->context1 = gtk_widget_get_style_context (a->button);
-			gtk_style_context_add_class (a->context1, "suggested-action");
-
-			gtk_widget_set_hexpand (a->button, TRUE);
-			gtk_widget_set_vexpand (a->button, TRUE);
-
-			gtk_grid_attach (GTK_GRID (grid), a->button, a->i, a->j, 1, 1);
-
-			for (k = 0; k < (a->difficulty / 2); k++)
-			{
-				if (a->difficulty*a->j+a->i == a->chosenNumber[k])
-				{
-					a->context1 = gtk_widget_get_style_context (a->button);
-					gtk_style_context_add_class (a->context1, "destructive-action");
-				}
-			}
-		}
-	}
-
-	vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 10);
-	gtk_overlay_add_overlay (GTK_OVERLAY (a->overlay), vbox);
-	gtk_overlay_set_overlay_pass_through (GTK_OVERLAY (a->overlay), vbox, TRUE);
-	gtk_widget_set_halign (vbox, GTK_ALIGN_CENTER);
-	gtk_widget_set_valign (vbox, GTK_ALIGN_CENTER);
-
-	gtk_container_add (GTK_CONTAINER (a->window), a->overlay);
-
-	gtk_widget_show_all (GTK_WIDGET (a->window));
-
-	g_snprintf (a->msg, 256, "watch out the places for %d secondes...", a->difficulty/2);
-	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->msg);
-
-	g_timeout_add (a->difficulty*500, (GSourceFunc) wait, (gpointer) a);
-}
-
-void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data, int gridsize)
+void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data)
 {
 	GtkWidget *grid;
 	GtkWidget *vbox;
@@ -333,8 +297,17 @@ void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data,
 	time_t timer;
 	time (&timer);
 	srand ( (unsigned int) timer);
+	int k;
 
 	widgets *a = (widgets *) data;
+
+	printf("CHEATER mode -");
+
+	for (k = 0; k < (a->difficulty / 2); k++)
+	{
+		printf(" %03d |", a->chosenNumber[k]);
+	}
+	printf("\n");
 
 	a->overlay = gtk_overlay_new ();
 	grid = gtk_grid_new ();
@@ -342,9 +315,7 @@ void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data,
 
 	a->statusbar = gtk_statusbar_new();
 	gtk_widget_set_size_request (a->statusbar, 300, 10);
-
-	gtk_grid_attach (GTK_GRID (grid), a->statusbar, 0, gridsize+1, gridsize, 1);
-
+	gtk_grid_attach (GTK_GRID (grid), a->statusbar, 0, a->difficulty+1, a->difficulty, 1);
 	a->id = gtk_statusbar_get_context_id (GTK_STATUSBAR (a->statusbar), "demo");
 
 	for (a->j = 0; a->j < a->difficulty; a->j++)
@@ -371,6 +342,7 @@ void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data,
 
 			g_signal_connect (a->button, "clicked", G_CALLBACK (do_number), (gpointer) a);
 			gtk_grid_attach (GTK_GRID (grid), a->button, a->i, a->j, 1, 1);
+
 			a->gamecount = 0;
 		}
 	}
@@ -387,36 +359,126 @@ void construct_overlay_play (GtkApplication *app, GtkWidget *box, gpointer data,
 
 	_start_timer((gpointer) a);
 
-	g_snprintf (a->msg, 256, "select the correct %02d | %02d | %02d | %02d | %02d | %02d", a->chosenNumber[0], a->chosenNumber[1], a->chosenNumber[2], a->chosenNumber[3], a->chosenNumber[4], a->chosenNumber[5]);
-	//gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->msg);
+	g_snprintf (a->msg, 256, "klick the correct buttons in time...");
 }
 
-static void construct_menu (GtkApplication *app, GtkWidget *box, gpointer data)
+void construct_overlay (GtkApplication *app, GtkWidget *box, gpointer data)
+{
+	GtkWidget *grid;
+	GtkWidget *vbox;
+	int k, l;
+	int good = 0;
+	time_t timer;
+	time (&timer);
+	srand ( (unsigned int) timer);
+
+	widgets *a = (widgets *) data;
+
+	a->firstgame = 0;
+
+	a->overlay = gtk_overlay_new ();
+	grid = gtk_grid_new ();
+	gtk_container_add (GTK_CONTAINER (a->overlay), grid);
+
+	a->statusbar = gtk_statusbar_new();
+	gtk_widget_set_size_request (a->statusbar, 300, 10);
+
+	gtk_grid_attach (GTK_GRID (grid), a->statusbar, 0, a->difficulty+1, a->difficulty, 1);
+
+	a->id = gtk_statusbar_get_context_id (GTK_STATUSBAR (a->statusbar), "demo");
+
+	while (1)
+	{
+		for (k = 0; k < a->difficulty / 2; k++)
+		{
+			a->chosenNumber[k] = rand() % (a->difficulty*a->difficulty);
+		}
+
+		for(k = a->difficulty / 2; k > 0; k--)
+		{
+			for(l = k - 1; l >= 0; l--)
+			{
+				if(a->chosenNumber[k] == a->chosenNumber[l])
+				{
+					good++;
+				}
+			}
+		}
+
+		if (good == 0)
+		{
+			break;
+		}
+		else
+		{
+			good = 0;
+		}
+	}
+
+	for (a->j = 0; a->j < a->difficulty; a->j++)
+	{
+		for (a->i = 0; a->i < a->difficulty; a->i++)
+		{
+			a->buttons[a->difficulty*a->j + a->i] = gtk_button_new();
+
+			GValue opacity = G_VALUE_INIT;
+			g_value_init (&opacity, G_TYPE_FLOAT);
+			g_value_set_float (&opacity, 1.0);
+			g_object_set_property (G_OBJECT (a->buttons[a->difficulty*a->j + a->i]), "opacity", &opacity);
+			g_value_unset (&opacity);
+
+			a->context1 = gtk_widget_get_style_context (a->buttons[a->difficulty*a->j + a->i]);
+			gtk_style_context_add_class (a->context1, "suggested-action");
+
+			gtk_widget_set_hexpand (a->buttons[a->difficulty*a->j + a->i], TRUE);
+			gtk_widget_set_vexpand (a->buttons[a->difficulty*a->j + a->i], TRUE);
+
+			gtk_grid_attach (GTK_GRID (grid), a->buttons[a->difficulty*a->j + a->i], a->i, a->j, 1, 1);
+		}
+	}
+
+	vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 10);
+	gtk_overlay_add_overlay (GTK_OVERLAY (a->overlay), vbox);
+	gtk_overlay_set_overlay_pass_through (GTK_OVERLAY (a->overlay), vbox, TRUE);
+	gtk_widget_set_halign (vbox, GTK_ALIGN_CENTER);
+	gtk_widget_set_valign (vbox, GTK_ALIGN_CENTER);    	
+
+	gtk_container_add (GTK_CONTAINER (a->window), a->overlay);
+
+	gtk_widget_show_all (GTK_WIDGET (a->window));
+
+	g_snprintf (a->msg, 256, "watch out the highlighted places for %d secondes and remember the location...", a->difficulty / 2);
+	gtk_statusbar_push (GTK_STATUSBAR (a->statusbar), a->id, a->msg);	
+	
+	for (a->k = 0; a->k < (a->difficulty / 2); a->k++)
+	{		
+		GtkWidget *button_image = gtk_image_new_from_file("start-here.png");
+		gtk_button_set_image(GTK_BUTTON(a->buttons[a->chosenNumber[a->k]]), button_image);
+	}	
+	
+	g_timeout_add (a->difficulty*500, (GSourceFunc) wait, (gpointer) a);
+}
+
+void construct_menu (GtkApplication *app, gpointer data)
 {
 	GtkWidget *headerbar;
-
-	// the application menu displayed in the GNOME panel
 	GMenu *appmenu;
 	GMenu *gamemenu;
 	GMenu *helpmenu;
 	GMenu *gamesubmenu;
 	GMenu *helpsubmenu;
 	GMenu *diffsubmenu;
-
-	// the menu displayed as a popover below the gears button
 	GMenu *gearmenu;
 	GtkWidget *gearicon;
 
 	widgets *a = (widgets *) data;
 
-	// define keyboard accelerators
 	const gchar *restart_accels[2] = 	{ "<Ctrl>R", NULL };
 	const gchar *view_accels[2] = 		{ "<Ctrl>V", NULL };
 	const gchar *quit_accels[2] =  		{ "<Ctrl>Q", NULL };
 	const gchar *about_accels[2] =  	{ "<Ctrl>A", NULL };
 	const gchar *help_accels[2] =   	{ "F1", NULL };
 
-	// create and fill in the application menu in the GNOME panel
 	appmenu = g_menu_new();
 	g_menu_append (appmenu, "about", "app.about");
 	g_menu_append (appmenu, "help", "app.help");
@@ -424,21 +486,18 @@ static void construct_menu (GtkApplication *app, GtkWidget *box, gpointer data)
 	gtk_application_set_app_menu (GTK_APPLICATION (app), G_MENU_MODEL (appmenu));
 	g_object_unref (appmenu);
 
-	// create a headerbar
 	headerbar = gtk_header_bar_new ();
 	gtk_widget_show (headerbar);
 	gtk_header_bar_set_title (GTK_HEADER_BAR (headerbar), "GTK GUI Task BEL2 - memory game");
-	gtk_header_bar_set_subtitle (GTK_HEADER_BAR (headerbar), "el16b005");
+	gtk_header_bar_set_subtitle (GTK_HEADER_BAR (headerbar), "el16b005 - helmut resch - www.dwell.at");
 	gtk_header_bar_set_show_close_button (GTK_HEADER_BAR (headerbar), TRUE);
 	gtk_window_set_titlebar (GTK_WINDOW (a->window), headerbar);
 
-	// create the gear menu button
 	a->gearmenubutton = gtk_menu_button_new();
 	gearicon = gtk_image_new_from_icon_name ("emblem-system-symbolic", GTK_ICON_SIZE_SMALL_TOOLBAR);
 	gtk_button_set_image (GTK_BUTTON (a->gearmenubutton), gearicon);
 	gtk_header_bar_pack_end (GTK_HEADER_BAR (headerbar), a->gearmenubutton);
 
-	// create a menu for the gear button
 	gearmenu = g_menu_new();
 
 	gamemenu = g_menu_new();
@@ -477,25 +536,14 @@ static void construct_menu (GtkApplication *app, GtkWidget *box, gpointer data)
 	gtk_application_set_accels_for_action (GTK_APPLICATION (app), "app.help", help_accels);
 
 	gtk_widget_set_sensitive (GTK_WIDGET (a->gearmenubutton), FALSE);
-
 }
 
-static void activate (GtkApplication *app, gpointer data)
+void constructWelcomePage (GtkApplication *app, gpointer data)
 {
-	GtkWidget *easyButton, *mediumButton, *hardButton, *normalButton;
+	GtkWidget *easyButton, *mediumButton, *hardButton, *normalButton, *highButton;
 	GtkWidget *labelName;
 
 	widgets *a = (widgets *) data;
-
-	a->window = gtk_application_window_new (app);
-	gtk_window_set_application (GTK_WINDOW (a->window), GTK_APPLICATION (app));
-	gtk_window_set_title (GTK_WINDOW (a->window), "GNOME Menu");
-	gtk_window_set_position (GTK_WINDOW (a->window), GTK_WIN_POS_CENTER);
-	gtk_window_set_default_size (GTK_WINDOW (a->window), 700, 660);
-	gtk_window_set_resizable (GTK_WINDOW (a->window), FALSE);
-
-	construct_menu (app, NULL, (gpointer) a);
-	a->difficulty = 7;
 
 	a->grid = gtk_grid_new();
 	gtk_grid_set_column_homogeneous (GTK_GRID (a->grid), TRUE);
@@ -532,13 +580,101 @@ static void activate (GtkApplication *app, gpointer data)
 	normalButton = gtk_button_new_with_mnemonic ("\n_ALL OPTIONS\n");
 	gtk_grid_attach (GTK_GRID (a->grid), normalButton, 2, 6, 1, 1);
 	g_signal_connect (normalButton, "clicked", G_CALLBACK (normal_button), (gpointer) a);
+	
+	labelName = gtk_label_new ("\nor check the highscores\n");
+	gtk_widget_set_halign (labelName, GTK_ALIGN_CENTER);
+	gtk_widget_set_size_request (labelName, 40, 30);
+	gtk_grid_attach (GTK_GRID (a->grid), labelName, 1, 7, 3, 1);
 
-	a->firstgame = 1;
+	highButton = gtk_button_new_with_mnemonic ("\n_HIGHSCORE\n");
+	gtk_grid_attach (GTK_GRID (a->grid), highButton, 2, 8, 1, 1);
+	g_signal_connect (highButton, "clicked", G_CALLBACK (high_button), (gpointer) a);	
 
 	gtk_widget_show_all (GTK_WIDGET (a->window));
 }
 
-static void startup (GApplication *app, gpointer data)
+void constructHighscorePage (GtkApplication *app, gpointer data)
+{
+	GtkWidget *window = gtk_window_new (GTK_WINDOW_TOPLEVEL);	
+	GtkWidget *sw;
+/*	widgets *a = (widgets *) data;*/
+	GtkTextIter iter;
+  	GtkTextIter start, end;
+	GtkTextBuffer *buffer;
+	GtkWidget *view1;
+	
+	gtk_container_set_border_width (GTK_CONTAINER (window), 25);
+        gtk_window_set_title (GTK_WINDOW (window), "HIGHSCORE");
+        gtk_window_set_modal (GTK_WINDOW (window), TRUE);
+        gtk_window_set_resizable (GTK_WINDOW (window), FALSE);
+        gtk_window_set_position (GTK_WINDOW (window), GTK_WIN_POS_MOUSE);
+	gtk_window_set_default_size (GTK_WINDOW (window), 500, 400);
+	
+	
+        buffer = gtk_text_buffer_new (NULL);
+        
+	gtk_text_buffer_create_tag (buffer, "not_editable",
+                              "editable", FALSE, NULL);
+
+  	gtk_text_buffer_create_tag (buffer, "word_wrap",
+                              "wrap_mode", GTK_WRAP_WORD, NULL);
+        
+	gtk_text_buffer_create_tag (buffer, "heading",
+                              "weight", PANGO_WEIGHT_BOLD,
+                              "size", 15 * PANGO_SCALE,
+                              NULL);
+	view1 = gtk_text_view_new_with_buffer (buffer);
+
+	sw = gtk_scrolled_window_new (NULL, NULL);
+	      gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (sw),
+                                      GTK_POLICY_AUTOMATIC,
+                                      GTK_POLICY_AUTOMATIC);
+
+	gtk_container_add (GTK_CONTAINER (sw), view1);
+	
+	gtk_window_set_focus (GTK_WINDOW (window), sw);	
+	
+	gtk_text_buffer_get_iter_at_offset (buffer, &iter, 0);
+
+  	gtk_text_buffer_insert (buffer, &iter,
+      	"The text widget can display text with all kinds of nifty attributes. "
+      	"It also supports multiple views of the same buffer; this demo is "
+      	"showing the same buffer in two places.\n\n", -1);
+
+	gtk_text_buffer_get_bounds (buffer, &start, &end);
+	gtk_text_buffer_apply_tag_by_name (buffer, "word_wrap", &start, &end);
+	gtk_text_buffer_apply_tag_by_name (buffer, "not_editable", &start, &end);
+	
+/*	gtk_text_buffer_apply_tag_by_name (buffer, "heading", &start, &end);*/
+	gtk_container_add (GTK_CONTAINER (window), sw);
+	
+	gtk_widget_show_all (GTK_WIDGET (window));
+}
+
+void activate (GtkApplication *app, gpointer data)
+{
+	widgets *a = (widgets *) data;
+
+	a->continue_timer = FALSE;
+	a->start_timer = FALSE;
+
+	a->window = gtk_application_window_new (app);
+	gtk_window_set_application (GTK_WINDOW (a->window), GTK_APPLICATION (app));
+	gtk_window_set_title (GTK_WINDOW (a->window), "GNOME Menu");
+	gtk_window_set_position (GTK_WINDOW (a->window), GTK_WIN_POS_CENTER);
+	gtk_window_set_default_size (GTK_WINDOW (a->window), 700, 660);
+	gtk_window_set_resizable (GTK_WINDOW (a->window), FALSE);
+
+	a->difficulty = 7;
+	a->firstgame = 1;
+
+	construct_menu (app, (gpointer) a);
+	constructWelcomePage (app, (gpointer) a);
+
+	gtk_widget_show_all (GTK_WIDGET (a->window));
+}
+
+void startup (GApplication *app, gpointer data)
 {
 	widgets *a = (widgets *) data;
 
